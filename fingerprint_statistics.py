@@ -106,11 +106,6 @@ def main() -> int:
     baseline = lookup(BASELINE.name)
     print("\nWhat moves molecule-level ambiguity, against the ECFP4 baseline")
     print(
-        "  The ceiling quoted is the corpus-wide bound, which is comparable across rows.\n"
-        "  The per-subset ceiling in the table above is conditional on each row's own\n"
-        "  ambiguous compounds, so it falls as a configuration resolves the easy ones.\n"
-    )
-    print(
         f"  {'baseline ' + BASELINE.name:<34s} "
         f"{100 * baseline['fraction_ambiguous']:5.2f}% ambiguous  "
         f"ceiling {baseline['ceiling_overall']:.4f}"

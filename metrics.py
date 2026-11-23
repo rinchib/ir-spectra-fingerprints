@@ -70,39 +70,3 @@ def all_metrics(Y_true: np.ndarray, Y_pred: np.ndarray) -> dict[str, float]:
         "cosine": cosine(Y_true, Y_pred),
         "MAE": mae(Y_true, Y_pred),
     }
-
-
-def ambiguity_ceiling(
-    Y: np.ndarray, groups: list[np.ndarray], sigma_cm: float | None = HEADLINE_SIGMA_CM
-) -> dict:
-    n_compounds = Y.shape[0]
-    Y_normalized = sum_normalize(Y)
-
-    if not groups:
-        return {
-            "n_ambiguous": 0,
-            "fraction_ambiguous": 0.0,
-            "ceiling_on_ambiguous": float("nan"),
-            "ceiling_overall": 1.0,
-        }
-
-    members = np.concatenate(groups)
-    predictions = np.empty((len(members), Y.shape[1]), dtype=np.float64)
-
-    cursor = 0
-    for group in groups:
-        group_mean = Y_normalized[group].mean(axis=0)
-        predictions[cursor : cursor + len(group)] = group_mean
-        cursor += len(group)
-
-    scores = per_spectrum_sis(Y_normalized[members], predictions, sigma_cm)
-    ceiling_on_ambiguous = float(scores.mean())
-
-    overall = (scores.sum() + (n_compounds - len(members))) / n_compounds
-
-    return {
-        "n_ambiguous": int(len(members)),
-        "fraction_ambiguous": float(len(members) / n_compounds),
-        "ceiling_on_ambiguous": ceiling_on_ambiguous,
-        "ceiling_overall": float(overall),
-    }

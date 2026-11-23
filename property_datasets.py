@@ -107,17 +107,12 @@ def make_groups(smiles: list[str], scheme: str, name: str) -> np.ndarray:
     return cluster_groups(smiles, name)
 
 
-def scalar_ceiling(y: np.ndarray, groups: list[np.ndarray]) -> dict:
-    if not groups:
-        return {"n_ambiguous_groups": 0, "n_ambiguous": 0, "fraction_ambiguous": 0.0,
-                "within_group_rmse": float("nan"), "irreducible_rmse": 0.0}
-    squared = np.concatenate([(y[g] - y[g].mean()) ** 2 for g in groups])
+def ambiguity(n_molecules: int, groups: list[np.ndarray]) -> dict:
+    n_ambiguous = int(sum(len(group) for group in groups))
     return {
         "n_ambiguous_groups": len(groups),
-        "n_ambiguous": int(len(squared)),
-        "fraction_ambiguous": float(len(squared) / len(y)),
-        "within_group_rmse": float(np.sqrt(squared.mean())),
-        "irreducible_rmse": float(np.sqrt(squared.sum() / len(y))),
+        "n_ambiguous": n_ambiguous,
+        "fraction_ambiguous": n_ambiguous / n_molecules,
     }
 
 
@@ -127,25 +122,24 @@ def run_statistics(datasets: list[str]) -> pd.DataFrame:
         smiles, y, molecules = load_dataset(name)
         print(f"\n{name}: {len(molecules):,} molecules, target sd {y.std():.3f} {DATASETS[name][3]}")
         header = (f"  {'axis':<11s}{'configuration':<34s}{'dim':>7s}{'sub coll':>10s}"
-                  f"{'ambig':>8s}{'floor':>8s}")
+                  f"{'ambig':>8s}")
         print(header)
         print("  " + "-" * (len(header) - 2))
         for axis, config in design_grid():
             featurizer = build_featurizer(config)
             X = featurizer.fit_transform(molecules)
             collisions = folding_collision_stats(featurizer)
-            ceiling = scalar_ceiling(y, identical_row_groups(X))
+            ambiguous = ambiguity(len(molecules), identical_row_groups(X))
             rows.append({
                 "dataset": name, "n_molecules": len(molecules), "target_sd": float(y.std()),
                 "axis": axis, "config": config.name, "radius": config.radius,
                 "n_bits": config.n_bits, "counts": config.counts, "invariants": config.invariants,
                 "chirality": config.chirality, "pooling": config.pooling,
-                "n_features": int(X.shape[1]), **collisions, **ceiling,
+                "n_features": int(X.shape[1]), **collisions, **ambiguous,
             })
             print(f"  {axis:<11s}{config.name:<34s}{X.shape[1]:>7,d}"
                   f"{100 * collisions['substructure_collision_rate']:>9.1f}%"
-                  f"{100 * ceiling['fraction_ambiguous']:>7.2f}%"
-                  f"{ceiling['within_group_rmse']:>8.3f}")
+                  f"{100 * ambiguous['fraction_ambiguous']:>7.2f}%")
     table = pd.DataFrame(rows)
     out = paths.RESULTS / "properties_statistics.csv"
     table.to_csv(out, index=False)

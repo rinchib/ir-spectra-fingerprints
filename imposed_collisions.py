@@ -44,12 +44,12 @@ def unfolded_params(base_name: str, scheme: str) -> dict:
     return json.loads(source.read_text(encoding="utf-8"))["params"]
 
 
-def corpus_diagnostics(config, molecules, Y) -> dict:
+def corpus_diagnostics(config, molecules) -> dict:
     featurizer = build_featurizer(config)
     X = featurizer.fit_transform(molecules)
     stats = folding_collision_stats(featurizer)
     groups = identical_row_groups(X)
-    ceiling = metrics.ambiguity_ceiling(Y, groups)
+    n_ambiguous = int(sum(len(group) for group in groups))
     return {
         "n_features": int(X.shape[1]),
         "n_substructures": stats["n_substructures"],
@@ -58,9 +58,8 @@ def corpus_diagnostics(config, molecules, Y) -> dict:
         "substructure_collision_rate": stats["substructure_collision_rate"],
         "n_moved": stats.get("n_moved", 0),
         "n_ambiguous_groups": len(groups),
-        "n_ambiguous": ceiling["n_ambiguous"],
-        "fraction_ambiguous": ceiling["fraction_ambiguous"],
-        "ceiling_overall": ceiling["ceiling_overall"],
+        "n_ambiguous": n_ambiguous,
+        "fraction_ambiguous": n_ambiguous / len(molecules),
     }
 
 
@@ -103,7 +102,7 @@ def main() -> int:
 
     print("\nWhat each share moved does to the fingerprint (fitted on the whole dataset)")
     header = (f"  {'strategy':<17s}{'f':>5s}{'moved':>7s}{'occupied':>9s}"
-              f"{'sub coll':>10s}{'ambiguous':>11s}{'ceiling':>9s}")
+              f"{'sub coll':>10s}{'ambiguous':>11s}")
     print(header)
     print("  " + "-" * (len(header) - 2))
     diagnostics: dict[tuple[str, float], dict] = {}
@@ -112,12 +111,11 @@ def main() -> int:
             if fraction == 0.0 and (strategy, 0.0) in diagnostics:
                 continue
             key = (strategy, fraction)
-            diagnostics[key] = corpus_diagnostics(config_for(*key), molecules, Y)
+            diagnostics[key] = corpus_diagnostics(config_for(*key), molecules)
             d = diagnostics[key]
             print(f"  {strategy:<17s}{fraction:>5.2f}{d['n_moved']:>7,d}{d['n_occupied_columns']:>9,d}"
                   f"{100 * d['substructure_collision_rate']:>9.1f}%"
-                  f"{d['n_ambiguous']:>7,d} ({100 * d['fraction_ambiguous']:4.2f}%)"
-                  f"{d['ceiling_overall']:>9.4f}")
+                  f"{d['n_ambiguous']:>7,d} ({100 * d['fraction_ambiguous']:4.2f}%)")
 
     schemes = list(splits.SCHEMES) if args.scheme == "both" else [args.scheme]
 

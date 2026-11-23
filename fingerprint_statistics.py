@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
-import metrics
 import paths
 from fingerprints import (
     BASELINE,
@@ -48,13 +46,12 @@ def main() -> int:
     paths.ensure_dirs()
 
     corpus = pd.read_csv(paths.CORPUS_TABLE)
-    Y = np.load(paths.CORPUS_SPECTRA)
     molecules = parse_molecules(corpus["canonical_smiles"].tolist())
-    print(f"Corpus: {len(molecules):,} compounds, spectra {Y.shape}\n")
+    print(f"Corpus: {len(molecules):,} compounds\n")
 
     header = (
         f"{'axis':<11s} {'configuration':<34s} {'dim':>6s} {'subs':>7s} "
-        f"{'sub coll':>9s} {'cover':>7s} {'groups':>7s} {'ambig':>7s} {'ceiling':>8s}"
+        f"{'sub coll':>9s} {'cover':>7s} {'groups':>7s} {'ambig':>7s}"
     )
     print(header)
     print("-" * len(header))
@@ -67,7 +64,8 @@ def main() -> int:
         collisions = folding_collision_stats(featurizer)
         coverage = featurizer.coverage(molecules)
         groups = identical_row_groups(X)
-        ceiling = metrics.ambiguity_ceiling(Y, groups)
+        n_ambiguous = int(sum(len(group) for group in groups))
+        fraction_ambiguous = n_ambiguous / len(molecules)
 
         row = {
             "axis": axis,
@@ -82,7 +80,8 @@ def main() -> int:
             "density": float((X > 0).mean()),
             "substructure_coverage": coverage,
             **collisions,
-            **ceiling,
+            "n_ambiguous": n_ambiguous,
+            "fraction_ambiguous": fraction_ambiguous,
         }
         rows.append(row)
 
@@ -91,8 +90,7 @@ def main() -> int:
             f"{collisions['n_substructures']:7d} "
             f"{100 * collisions['substructure_collision_rate']:8.1f}% "
             f"{100 * coverage:6.1f}% {len(groups):7d} "
-            f"{100 * ceiling['fraction_ambiguous']:6.2f}% "
-            f"{ceiling['ceiling_on_ambiguous']:8.4f}"
+            f"{100 * fraction_ambiguous:6.2f}%"
         )
 
     table = pd.DataFrame(rows)
@@ -107,8 +105,7 @@ def main() -> int:
     print("\nWhat moves molecule-level ambiguity, against the ECFP4 baseline")
     print(
         f"  {'baseline ' + BASELINE.name:<34s} "
-        f"{100 * baseline['fraction_ambiguous']:5.2f}% ambiguous  "
-        f"ceiling {baseline['ceiling_overall']:.4f}"
+        f"{100 * baseline['fraction_ambiguous']:5.2f}% ambiguous"
     )
     for label, name in [
         ("counts instead of presence", "r2_b2048_count"),
@@ -126,8 +123,7 @@ def main() -> int:
         row = lookup(name)
         delta = 100 * (row["fraction_ambiguous"] - baseline["fraction_ambiguous"])
         print(
-            f"  {label:<34s} {100 * row['fraction_ambiguous']:5.2f}% ambiguous  "
-            f"ceiling {row['ceiling_overall']:.4f}  ({delta:+.2f} points)"
+            f"  {label:<34s} {100 * row['fraction_ambiguous']:5.2f}% ambiguous  ({delta:+.2f} points)"
         )
 
     return 0
